@@ -1,4 +1,4 @@
-#This example demonstrates a simple temperature sensor peripheral.
+# This example demonstrates a simple temperature sensor peripheral.
 # The sensor's local value updates every second, and it will notify
 # any connected central every 10 seconds.
 
@@ -51,7 +51,6 @@ TOGGLE_ATTR_4 = (
     _FLAG_READ | _FLAG_WRITE,
 )
 
-
 _ENV_SENSE_SERVICE = (
     _ENV_SENSE_UUID,
     (SONAR_ATTR, TOGGLE_ATTR_1, TOGGLE_ATTR_2, TOGGLE_ATTR_3, TOGGLE_ATTR_4,),
@@ -62,7 +61,8 @@ _ADV_APPEARANCE_GENERIC_THERMOMETER = const(768)
 
 
 class BLETemperature:
-    def __init__(self, ble, name="ESP32"):
+    def __init__(self):
+        ble = bluetooth.BLE()
         self.led = Pin(2, Pin.OUT)
         self.timer1 = Timer(0)
         self._ble = ble
@@ -71,7 +71,7 @@ class BLETemperature:
         (self.handles,) = self._ble.gatts_register_services((_ENV_SENSE_SERVICE,))
         self._connections = set()
         self._payload = advertising_payload(
-            name=name, services=[_ENV_SENSE_UUID], appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER
+            name="ESP32", services=[_ENV_SENSE_UUID], appearance=_ADV_APPEARANCE_GENERIC_THERMOMETER
         )
         self._advertise()
         self.timer1.init(period=100, mode=Timer.PERIODIC, callback=lambda t: self.led.value(not self.led.value()))
@@ -107,19 +107,22 @@ class BLETemperature:
 
         elif event == _IRQ_GATTS_WRITE:
             conn_handle, attr_handle = data
-            if attr_handle in self.relay_handles:
-                index = self.relay_handles.index(attr_handle)
-                request_state = self._ble.gatts_read(self.handles[index + 1])
-                if request_state == b'':
-                    state = not self.relays[index].value()
-                else:
-                    state = int(request_state)
+            self.update_state(conn_handle, attr_handle)
 
-                self.relays[index].value(state)
-                self._ble.gatts_write(self.handles[index+1],  str(state).encode("UTF-8"))
+    def update_state(self, conn_handle, attr_handle):
+        if attr_handle in self.relay_handles:
+            index = self.relay_handles.index(attr_handle)
+            request_state = self._ble.gatts_read(self.handles[index + 1])
+            if request_state == b'':
+                state = not self.relays[index].value()
+            else:
+                state = int(request_state)
 
-            elif attr_handle == self.handles[0]:
-                self.set_dist()
+            self.relays[index].value(state)
+            self._ble.gatts_write(self.handles[index + 1], str(state).encode("UTF-8"))
+
+        elif attr_handle == self.handles[0]:
+            self.set_dist()
 
     def set_dist(self):
         # Data is sint16 in degrees Celsius with a resolution of 0.01 degrees Celsius.
@@ -131,8 +134,7 @@ class BLETemperature:
 
 
 def demo():
-    ble = bluetooth.BLE()
-    temp = BLETemperature(ble)
+    temp = BLETemperature()
 
 
 if __name__ == "__main__":
